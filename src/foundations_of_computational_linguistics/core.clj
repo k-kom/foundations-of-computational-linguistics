@@ -45,11 +45,11 @@
 
 #_(sample-corpus sample-ab* 4)
 
-(defn score-corpus [scorer corpus]
-  (if (empty? corpus)
-    1.0
-    (* (scorer (first corpus))
-       (score-corpus scorer (rest corpus)))))
+#_(defn score-corpus [scorer corpus]
+    (if (empty? corpus)
+      1.0
+      (* (scorer (first corpus))
+         (score-corpus scorer (rest corpus)))))
 
 (defn prefix? [pr str]
   (cond
@@ -163,13 +163,14 @@
 ;; we assume each words is generated independently from some distribution without reference to the other words.
 (defn sample-BOW-sentence [vocab len]
   ;; is it better the probability of a vocablary is calculated from it (not as an argument)?
-  ;; because BOW is defined as that
+  ;; because BOW is defined as such
   (let [prob (uniform-distribution vocab)]
     (if (zero? len)
       '()
       (cons (sample-categorical vocab prob)
             (sample-BOW-sentence vocab (dec len))))))
 
+;; * unfold: a generator for structured objects like lists
 (defn list-unfold [generator len]
   (if (zero? len)
     '()
@@ -181,3 +182,43 @@
     (list-unfold #(sample-categorical vocab
                                       (uniform-distribution vocab))
                  len))
+
+;; * fold is a inverse operation of unfold
+(defn list-foldr [f base lst]
+  (if (empty? lst)
+    base
+    (f (first lst)
+       (list-foldr f base (rest lst)))))
+
+(defn score-BOW-sentence [sen vocablary]
+  (let [probabilities (uniform-distribution vocablary)]
+    (list-foldr
+     (fn [word rest-score]
+       (* (score-categorical word vocablary probabilities)
+          rest-score))
+     1
+     sen)))
+
+#_(score-BOW-sentence '(call me Ishmael) '(call me Ishmael))
+
+(defn score-corpus [corpus vocablary]
+  (list-foldr
+   (fn [sen rst]
+     (* (score-BOW-sentence sen vocablary) rst))
+   1
+   corpus))
+
+;; A corpus C is a multi-set of strings (e.g. real world data)
+#_(score-corpus
+   '((Call me Ishmael)
+     (Some years ago - never mind how long precisely
+           - having little or no money in my purse |,|
+           and nothing particular to interest me on shore
+           |,| I thought I would sail about a little and
+           see the watery part of the world))
+   '(Call me Ishmael Some years ago - never
+          mind how long precisely -
+          having little or no money in my purse |,|
+          and nothing particular to interest on shore
+          I thought would sail about a little see
+          the watery part of the world))
